@@ -6,7 +6,11 @@ from matplotlib import pyplot as plt
 import triangle as tr
 from typing import *
 
+from intersection import line_with_line
+
 """
+NOTE: there's somekind of randomization in the triangle lib that fail on edge case of a floating diagonal line but pass sometimes
+    TODO: fix it while simplifying contour, do 8 patterns?
 
 TODO: load mask
 
@@ -16,8 +20,11 @@ TODO: simplify contour
 
 transform poly to triangles
 
-TODO: using contour hierarchy handle polygons with hole
-    TODO: find point inside hole
+#TODO: make sure only sides (no mid triangles) are rendered while creating side triangles (poly with hole)
+#TODO: work in 1x and handle 1 pixel line as a special case (would allow slopes!!)
+
+using contour hierarchy handle polygons with hole
+    find point inside hole
 """
 
 SCALE = 6
@@ -37,8 +44,8 @@ class ContourHierarchy(object):
     def __init__(self, hierarchy):
         self._hierarchy = [ContourLevel(*_) for _ in hierarchy[0]]
 
-    def get_holes_indexes(self, parent_index):
-        return [_ for i, h in enumerate(self._hierarchy) if h.parent == parent_index]
+    def get_holes_index(self, parent_index):
+        return [_ for _, h in enumerate(self._hierarchy) if h.parent == parent_index]
 
 
 class STLWriter(object):
@@ -67,6 +74,9 @@ class STLWriter(object):
             v3x=v3x, v3y=v3y, v3z=v3z))
 
     def save(self, file_name):
+        if self._tri_count == 0:
+            print("No triangle pushed")
+            return
         with open(file_name, "w") as f:
             f.write("solid gg2")
             f.write(self._stl.getvalue())
@@ -74,17 +84,71 @@ class STLWriter(object):
 
 
 class Polygon(object):
-    def __init__(self, pts: np.ndarray, holes: np.ndarray=None):
+    def __init__(self, pts: np.ndarray, holes: List[np.ndarray] = None):
         n = len(pts)
         if n < 3:
             raise ValueError('A polygon must contains at least 3 points')
         pts.resize((n, 2))
-        s = np.array([(i, (i + 1)%n) for i in range(n)])
+        s = [(i, (i + 1)%n) for i in range(n)]
+        self.hole_pts = []
+        for hole in holes:
+            s, n, hole_pt = self._add_hole(n, s, hole)
+            self.hole_pts.append(hole_pt)
+        s = np.array(s)
         poly_dict = dict(vertices=pts, segments=s)
+        if holes:
+            pts = np.concatenate([pts] + holes)
+            poly_dict['vertices'] = pts
+            poly_dict['holes'] = np.array(self.hole_pts)
         tri_dict = tr.triangulate(poly_dict, 'p')
         self._plane_triangles = tri_dict['triangles']
         self._contour = pts
         self._winding = self._compute_winding(pts)
+
+    def _add_hole(self, current_vertex_count, segments, hole_vertices):
+        n = len(hole_vertices)
+        if n < 3:
+            raise ValueError('A polygon hole must contains at least 3 points')
+        hole_vertices.resize((n, 2))
+        s = [(current_vertex_count + i, current_vertex_count + (i + 1)%n) for i in range(n)]  # reverse winding??
+        hole_pt = self._find_hole_position(hole_vertices)
+        return segments + s, current_vertex_count + n, hole_pt
+
+    def _find_hole_position(self, hole_vertices):
+        n = len(hole_vertices)
+        hole_pt = sum(hole_vertices)/n
+        ray_start = np.copy(hole_pt)
+        ray_start[0] = min(hole_vertices[:, 0]) - 1
+        crossed, hole_pt = self._ray_march(ray_start, hole_pt, hole_vertices)
+        if crossed is None:  # if it doesn't intersects from the left then it most from the right
+            ray_start[0] = max(hole_vertices[:, 0]) + 1
+            crossed, hole_pt = self._ray_march(ray_start, hole_pt, hole_vertices)
+            if crossed is None:
+                raise RuntimeError("Could't find a point inside the hole, write some unit test :^)")
+        return hole_pt
+
+    @staticmethod
+    def _ray_march(start, target, hole_vertices):
+        # FIXME: segments order isn't guaranteed
+        """
+        keep 2 lists intersecting edge index with the x intersection position
+        one for the right side one for the left
+        if centroid isn't inside, sort and pick average of last 2
+        """
+        crossed = None
+        previous_pt = hole_vertices[-1]
+        for pt in hole_vertices:
+            r = line_with_line(previous_pt, pt, start, target)
+            if r is None:
+                continue
+            dy = pt[1] - previous_pt[1]
+            if (dy > 0 and np.all(r != previous_pt)) or (dy < 0 and np.all(r != pt)):
+                if crossed is None:
+                    crossed = r
+                else:
+                    target = (r + crossed)/2
+                    break
+        return crossed, target
 
     @staticmethod
     def _compute_winding(pts):
@@ -124,7 +188,7 @@ class Polygon(object):
 
 class Mask(object):
     def __init__(self, file_name):
-        #self._image = cv2.imread(file_name)
+        # self._image = cv2.imread(file_name)
         image = cv2.imread(file_name)
         height, width, _ = image.shape
         image[height - 1, 0] = (0, 0, 0)
@@ -135,15 +199,22 @@ class Mask(object):
         self._contours, hierarchy = cv2.findContours(gray, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         self._hierarchy = ContourHierarchy(hierarchy)
 
+        self._ignored = []  # debug stuff
+
     def get_polygons(self):
         to_skip = []
         n = len(self._contours)
         for i in range(n):
             if i in to_skip:
                 continue
-            holes = self._hierarchy.get_holes_indexes(i)
+            holes_index = self._hierarchy.get_holes_index(i)
+            [to_skip.append(_) for _ in holes_index]
             poly = self._contours[i]
-            yield Polygon(poly)
+            holes = [self._contours[_] for _ in holes_index]
+            print(i, " start")
+            yield Polygon(poly, holes)
+            print(i, " ok")
+        self._ignored = [self._contours[_] for _ in to_skip]
 
     def show_scatter(self):
         plt.imshow(self._image, cmap='gray')
@@ -151,7 +222,7 @@ class Mask(object):
         for l in self._contours:
             i += 1
             x, y = np.transpose(l)
-            plt.scatter(x, y, label=str(i)+". ")
+            plt.scatter(x, y, label=str(i) + ". ")
         plt.legend(loc="upper left")
         plt.show()
 
@@ -162,7 +233,11 @@ class Mask(object):
         for shape in self._contours:
             c = next(color)[0:3]
             t = next(triangle)
-            self._draw_poly_tris(shape, t, c)
+            for s in self._ignored:
+                if s is shape:
+                    break
+            else:
+                self._draw_poly_tris(shape, t, c)
             """for pts in shape:
                 p = pts[0]
                 self._image[p[1], p[0]] = c"""
@@ -174,7 +249,7 @@ class Mask(object):
         for polygon in self._contours:
             n = len(polygon)
             p = np.resize(polygon, (n, 2))
-            s = np.array([(i, (i+1)%n) for i in range(n)])
+            s = np.array([(i, (i + 1)%n) for i in range(n)])
             poly_dict = dict(vertices=p, segments=s)
             tri_dict = tr.triangulate(poly_dict, 'p')
             polygons.append(tri_dict["triangles"])
@@ -185,8 +260,8 @@ class Mask(object):
         for tri in tris:
             # compute centroid get pixel on map, if black then draw
             tri_pts = np.array([pts[_] for _ in tri], dtype=np.int32)
-            #cx, cy = [sum(_) for _ in tri_pts.T]
-            #if all(self._image[cy//3, cx//3] == self.SOLID_BGR):
+            # cx, cy = [sum(_) for _ in tri_pts.T]
+            # if all(self._image[cy//3, cx//3] == self.SOLID_BGR):
             cv2.polylines(self._image, [tri_pts], 1, color)
 
     @staticmethod
@@ -203,11 +278,11 @@ class Mask(object):
 
 
 if __name__ == "__main__":
-    m = Mask("gl.png")
+    m = Mask("heist.png")
     stl = STLWriter()
-    for p in m.get_polygons():
-        p.write_to(stl)
-    stl.save("gallery.stl")
+    #for p in m.get_polygons():
+    #    p.write_to(stl)
+    stl.save("heist.stl")
     print(m._hierarchy)
     m.show_scatter()
     #m.show()
