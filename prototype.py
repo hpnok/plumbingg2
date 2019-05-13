@@ -117,38 +117,34 @@ class Polygon(object):
     def _find_hole_position(self, hole_vertices):
         n = len(hole_vertices)
         hole_pt = sum(hole_vertices)/n
-        ray_start = np.copy(hole_pt)
-        ray_start[0] = min(hole_vertices[:, 0]) - 1
-        crossed, hole_pt = self._ray_march(ray_start, hole_pt, hole_vertices)
-        if crossed is None:  # if it doesn't intersects from the left then it most from the right
-            ray_start[0] = max(hole_vertices[:, 0]) + 1
-            crossed, hole_pt = self._ray_march(ray_start, hole_pt, hole_vertices)
-            if crossed is None:
-                raise RuntimeError("Could't find a point inside the hole, write some unit test :^)")
-        return hole_pt
+        return self._ray_march(hole_pt, hole_vertices)
 
     @staticmethod
-    def _ray_march(start, target, hole_vertices):
-        # FIXME: segments order isn't guaranteed
-        """
-        keep 2 lists intersecting edge index with the x intersection position
-        one for the right side one for the left
-        if centroid isn't inside, sort and pick average of last 2
-        """
-        crossed = None
-        previous_pt = hole_vertices[-1]
-        for pt in hole_vertices:
-            r = line_with_line(previous_pt, pt, start, target)
-            if r is None:
-                continue
-            dy = pt[1] - previous_pt[1]
-            if (dy > 0 and np.all(r != previous_pt)) or (dy < 0 and np.all(r != pt)):
-                if crossed is None:
-                    crossed = r
+    def _ray_march(target, hole_vertices):
+        crossed_left_segments = []
+        crossed_right_segments = []
+
+        previous_x, previous_y = hole_vertices[-1]
+        target_x, target_y = target
+        for current_x, current_y in hole_vertices:
+            if (previous_y > target_y) != (current_y > target_y):
+                x_intersection = ((current_x - previous_x)/(current_y - previous_y))*(target_y - previous_y) + previous_x
+                if x_intersection < target_x:
+                    crossed_left_segments.append(x_intersection)
                 else:
-                    target = (r + crossed)/2
-                    break
-        return crossed, target
+                    crossed_right_segments.append(x_intersection)
+
+        if crossed_left_segments:
+            if len(crossed_left_segments)%2 == 0:
+                crossed_left_segments.sort()
+                target[0] = sum(crossed_left_segments[-2:])/2
+        elif crossed_right_segments:
+            # since the sum of all crossing must be even, we can assume the right set is even
+            crossed_right_segments.sort()
+            target[0] = sum(crossed_right_segments[:2])/2
+        else:
+            raise RuntimeError("Could't find a point inside the hole, write some unit test :^)")
+        return target
 
     @staticmethod
     def _compute_winding(pts):
