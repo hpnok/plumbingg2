@@ -3,7 +3,9 @@ from typing import Iterator, Tuple
 import cv2
 import numpy as np
 from matplotlib import pyplot as plt
-from polygon.transform import step_to_slope
+
+from polygon.polygon import VerticesList
+from polygon.transform import step_to_slope, merge_slope
 
 SCALE = 6
 WORLD_DEPTH = 7*SCALE
@@ -38,11 +40,13 @@ class Viewer(object):
         # contours is a list of polygons' vertices stored as (x, y)
         self._contours, hierarchy = cv2.findContours(gray, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         self._contour_simplification1()
+
+        shift_corrections = None
         #shift_corrections = self._compute_shift(2, 2)
         #for s, cor in zip(self._contours, shift_corrections):
         #    cor = np.reshape(cor, (len(cor), 1, 2))
         #    s[:] = s + cor
-        self._contour_simplification2(None)
+        self._contour_simplification2(shift_corrections)
 
         self._ignored = []  # debug stuff
 
@@ -55,7 +59,7 @@ class Viewer(object):
         """
         new_cs = []
         for shape in self._contours:
-            new_c = SegmentList()
+            new_c = VerticesList()
             prev_p = shape[-1][0]
             n = len(shape)
             i = 0
@@ -86,7 +90,7 @@ class Viewer(object):
         if shift_correction is None:
             shift_correction = [None]*len(self._contours)
         for shape, correction in zip(self._contours, shift_correction):
-            new_cs.append(step_to_slope(shape, correction))
+            new_cs.append(merge_slope(step_to_slope(shape, correction)))
         self._contours = new_cs
 
     def get_at(self, x, y):
@@ -147,17 +151,6 @@ class Viewer(object):
         )
 
 
-class SegmentList(list):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def replace_last(self, _t: object):
-        try:
-            self[-1] = _t
-        except IndexError:
-            self.append(_t)
-
-
 if __name__ == '__main__':
-    m = Viewer("test.png")
+    m = Viewer("heist.png")
     m.show()
