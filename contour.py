@@ -5,7 +5,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from polygon.polygon import VerticesList
-from polygon.transform import step_to_slope, merge_slope
+from polygon.transform import step_to_slope, merge_slope, correction
 
 SCALE = 6
 WORLD_DEPTH = 7*SCALE
@@ -46,11 +46,15 @@ class Viewer(object):
         #for s, cor in zip(self._contours, shift_corrections):
         #    cor = np.reshape(cor, (len(cor), 1, 2))
         #    s[:] = s + cor
-        self._contour_simplification2(shift_corrections)
+        #self._contour_simplification2(shift_corrections)
+        for c in self._contours:
+            correction(c, 2, 2)
+        #TODO: with hierarchies, find holes at the same level and try to merge them!
+        #self._contour_simplification2()
 
         self._ignored = []  # debug stuff
 
-        #self._image = image
+        self._image = image
 
     def _contour_simplification1(self):
         """
@@ -136,7 +140,7 @@ class Viewer(object):
             plt.plot([], color=(r/255, g/255, b/255), label="{}: {}".format(i, len(shape)))
             for p in shape:
                 px, py = p[0]
-                self._image[py, px] = (r, g, b)
+                self._image[int(py), int(px)] = (r, g, b)
         plt.imshow(self._image)
         plt.legend(loc="upper left")
         plt.show()
@@ -152,5 +156,5 @@ class Viewer(object):
 
 
 if __name__ == '__main__':
-    m = Viewer("heist.png")
+    m = Viewer("test2.png")
     m.show()

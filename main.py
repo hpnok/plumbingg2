@@ -3,7 +3,7 @@ from polygon.extractor import get_gg2_image, ImageToPolygon
 
 
 if __name__ == '__main__':
-    name = "wm"
+    name = "test"
     image = get_gg2_image(name + ".png")
     loader = STLWriter()
     extractor = ImageToPolygon(image)

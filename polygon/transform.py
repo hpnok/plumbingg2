@@ -6,6 +6,7 @@ from .polygon import OrthogonalVertexList, CyclicList, VerticesList
 
 def to_orthogonal_contour(vertices: np.ndarray, binary_image: np.ndarray) -> np.ndarray:
     """
+    2 point neighbor diagonaly get merged as a single one that is still inside the map
     :param vertices: of a polygon
     :param binary_image: image where 0 are solids
     :return:
@@ -40,6 +41,7 @@ def to_orthogonal_contour(vertices: np.ndarray, binary_image: np.ndarray) -> np.
 
 def step_to_slope(vertices: np.ndarray, correction: np.ndarray = None) -> np.ndarray:
     """
+    extrapolate slope from a list of edges which are all at 90° of each other
     :param vertices: alterning orthogonal vectors
     :param correction: list of vertices correction to apply (optional)
     :return:
@@ -48,7 +50,7 @@ def step_to_slope(vertices: np.ndarray, correction: np.ndarray = None) -> np.nda
     deltas = _compute_deltas(v)
 
     i, n = 0, v.size
-    sloped_polygon = CyclicList(_.copy() for _ in v)
+    sloped_polygon = CyclicList(_.astype(np.float) for _ in v)
     while i < n:
         delta = deltas[i]
         if abs(delta) == SCALE:
@@ -73,6 +75,11 @@ def step_to_slope(vertices: np.ndarray, correction: np.ndarray = None) -> np.nda
 
 
 def merge_slope(vertices: np.ndarray):
+    """
+    if two consecutive edges have the same angle, they are merged
+    :param vertices:
+    :return:
+    """
     diagonals = CyclicList()
     v = CyclicList(vertices)
     prev = v[-1]
@@ -98,18 +105,53 @@ def merge_slope(vertices: np.ndarray):
     return np.array([_ for _ in v if _ is not None])
 
 
+def correction(vertices: np.ndarray, dx, dy):
+    """ INPLACE
+    TODO: don't make it inplace just like the other transforms?
+    undo the shift that was applied to the image to connect pixels of a slope
+    use normal of the neighbors of a vertex to determine if it must be moved"""
+    previous_p = vertices[-1][0]
+    sum = 0
+    for p in vertices:
+        p = p[0]
+        sum += previous_p[0]*p[1] - previous_p[1]*p[0]
+        previous_p = p
+    #  w = (0, 0, np.sign(sum))  # winding direction
+    w = (0, 0, -1)  # winding direction
+
+    correction_per_segment = []
+    previous_p = vertices[-1][0]
+    for p in vertices:
+        p = p[0]
+        v = p - previous_p
+        n = np.cross(v, w)
+        n = n/np.linalg.norm(n)
+        x = dx if n[0] > 0 else 0
+        y = dy if n[1] > 0 else 0
+        correction_per_segment.append((x, y))
+        previous_p = p
+
+    i = -1
+    n = len(vertices)
+    while i < n - 1:
+        dx1, dy1 = correction_per_segment[i]
+        dx2, dy2 = correction_per_segment[i + 1]
+        vertices[i] -= [max(dx1, dx2), max(dy1, dy2)]
+        i += 1
+
+
 def _apply_sloping(vertices: OrthogonalVertexList, deltas: CyclicList, current_index: int, sloped_polygon: CyclicList):
     previous_delta = deltas[current_index - 1]
     next_delta = deltas[current_index + 1]
     previous_direction = vertices[current_index - 1] - vertices[current_index - 2]
     next_direction = vertices[current_index + 1] - vertices[current_index]
     if abs(previous_delta - next_delta) <= SCALE:
-        sloped_polygon[current_index - 1] -= previous_direction//2
-        sloped_polygon[current_index] += next_direction//2
+        sloped_polygon[current_index - 1] -= previous_direction/2
+        sloped_polygon[current_index] += next_direction/2
     else:
-        d = min(abs(previous_delta), abs(next_delta))//2
-        sloped_polygon[current_index - 1] -= (previous_direction*d)//abs(previous_delta)
-        sloped_polygon[current_index] += (next_direction*d)//abs(next_delta)
+        d = min(abs(previous_delta), abs(next_delta))/2
+        sloped_polygon[current_index - 1] -= (previous_direction*d)/abs(previous_delta)
+        sloped_polygon[current_index] += (next_direction*d)/abs(next_delta)
 
 
 def _45_degrees_slope_picker(deltas: CyclicList) -> list:
