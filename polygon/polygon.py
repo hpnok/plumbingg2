@@ -59,6 +59,10 @@ class OrthogonalVertexList(object):
 
 
 class Polygon(object):
+    """
+    A polygon triangulated
+    """
+    # TODO: rename to TriangulatedPolygon, create a Polygon class to handle geomtry operations?
     # TODO: possible correction, we apply a SCALE to every point, then smear the image, the displaced vertices are then on "subpixels" of
     # the original image. By removing those subpixels we undo the smearing??? (must be done before sloping???)
     def __init__(self, pts: np.ndarray, holes: List[np.ndarray] = None):

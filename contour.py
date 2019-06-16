@@ -7,8 +7,7 @@ from matplotlib import pyplot as plt
 from polygon.polygon import VerticesList
 from polygon.transform import step_to_slope, merge_slope, correction
 
-SCALE = 6
-WORLD_DEPTH = 7*SCALE
+from constant import SCALE, WORLD_DEPTH
 
 
 class Viewer(object):
@@ -50,7 +49,7 @@ class Viewer(object):
         for c in self._contours:
             correction(c, 2, 2)
         #TODO: with hierarchies, find holes at the same level and try to merge them!
-        #self._contour_simplification2()
+        self._contour_simplification2()
 
         self._ignored = []  # debug stuff
 

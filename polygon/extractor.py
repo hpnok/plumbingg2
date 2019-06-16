@@ -2,9 +2,9 @@ import cv2
 import numpy as np
 
 from constant import SCALE
-from polygon.ContourHierarchy import ContourHierarchy
+from polygon.contourhierarchy import ContourHierarchy
 from polygon.polygon import Polygon
-from polygon.transform import to_orthogonal_contour, step_to_slope, merge_slope
+from polygon.transform import to_orthogonal_contour, step_to_slope, merge_slope, correction
 
 
 def get_gg2_image(file_name: str):
@@ -46,6 +46,7 @@ class ImageToPolygon(object):
         new_contours = []
         for shape in self._contours:
             orthogonal_contour = to_orthogonal_contour(shape, self._image)
+            correction(orthogonal_contour, 2, 2)
             contour = step_to_slope(orthogonal_contour)
             contour = merge_slope(contour)
             new_contours.append(contour)

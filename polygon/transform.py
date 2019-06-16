@@ -1,6 +1,9 @@
+from typing import List, Tuple, Set
+
 import numpy as np
 
 from constant import SCALE
+from polygon.contourhierarchy import ContourHierarchy
 from .polygon import OrthogonalVertexList, CyclicList, VerticesList
 
 
@@ -138,6 +141,52 @@ def correction(vertices: np.ndarray, dx, dy):
         dx2, dy2 = correction_per_segment[i + 1]
         vertices[i] -= [max(dx1, dx2), max(dy1, dy2)]
         i += 1
+
+
+def merge_holes(polygon_list: np.ndarray, holes_index: List[int]):
+    # a vertex has 2 edges the new point is the intersection of the orthogonal edges of the pair of points found.
+    # 1: detect hole that must be connected togheter and mark the indexes
+    connection_mapping = {}
+    for i in holes_index[:-1]:
+        hole_i = polygon_list[i]
+        for j in holes_index[i + 1:]:
+            hole_j = polygon_list[j]
+            connecting_pairs = _connect_hole(hole_i, hole_j)
+            if connecting_pairs:
+                connection_mapping[(i, j)] = connecting_pairs
+    hole_union: List[Set[int]] = []
+    for pair in connection_mapping:
+        pair_set = set(pair)
+        for union in hole_union:
+            if union.intersection(pair_set):
+                union |= pair_set
+                break
+        else:
+            hole_union.append(pair_set)
+    vertex_mapping = {index: [None]*len(polygon_list[index]) for index in holes_index}
+    for union in hole_union:
+        for hole_index in sorted(union):
+            new_poly = []
+            #  TODO: merge holes into a singe one, update contour hierarchy
+    # hole_union is the list of new holes, each set containt
+    return np.array([])
+
+
+def _connect_hole(hole1: np.ndarray, hole2: np.ndarray) -> List[Tuple[int, int]]:
+    """
+    :param hole1:
+    :param hole2:
+    :return: list of connected vertex index of the two hole
+    """
+    connecting_pairs = []
+    for i in range(len(hole1)):
+        pi = hole1[i][0]
+        for j in range(len(hole2)):
+            pj = hole2[j][0]
+            dx, dy = pj - pi
+            if 1 == abs(dx) == abs(dy):
+                connecting_pairs.append((i, j))
+    return connecting_pairs
 
 
 def _apply_sloping(vertices: OrthogonalVertexList, deltas: CyclicList, current_index: int, sloped_polygon: CyclicList):

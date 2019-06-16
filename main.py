@@ -10,4 +10,3 @@ if __name__ == '__main__':
     for poly in extractor.get_polygons():
         loader.write(poly)
     loader.save(name + ".stl")
-    print("success!")
