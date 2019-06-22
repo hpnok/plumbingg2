@@ -23,6 +23,7 @@ class VerticesList(list):
     """
     List of vertex to construct iteratively
     """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -58,59 +59,60 @@ class OrthogonalVertexList(object):
             yield v[0]
 
 
-class Polygon(object):
+class PolygonContour(object):
     """
-    A polygon triangulated
+    The perimeter of a polygon
     """
-    # TODO: rename to TriangulatedPolygon, create a Polygon class to handle geomtry operations?
-    # TODO: possible correction, we apply a SCALE to every point, then smear the image, the displaced vertices are then on "subpixels" of
-    # the original image. By removing those subpixels we undo the smearing??? (must be done before sloping???)
-    def __init__(self, pts: np.ndarray, holes: List[np.ndarray] = None):
-        n = len(pts)
-        perimiter_n = n
-        if n < 3:
+
+    def __init__(self, pts: np.ndarray):
+        if len(pts) < 3:
             raise ValueError('A polygon must contains at least 3 points')
-        pts.resize((n, 2))
-        s = [(i, (i + 1)%n) for i in range(n)]
-        self.hole_pts = []
-        for hole in holes:
-            s, n, hole_pt = self._add_hole(n, s, hole)
-            self.hole_pts.append(hole_pt)
-        s = np.array(s)
-        poly_dict = dict(vertices=pts, segments=s)
-        if holes:
-            pts = np.concatenate([pts] + holes)
-            poly_dict['vertices'] = pts
-            poly_dict['holes'] = np.array(self.hole_pts)
-        tri_dict = tr.triangulate(poly_dict, 'p')
-        self._plane_triangles = tri_dict['triangles']
-        self._face_vertices = tri_dict['vertices']
-        self._side_perimeter = pts
-        self._winding = self._compute_winding(pts[:perimiter_n])
-        self._segments = s
+        pts.resize((len(pts), 2))
+        self._vertices = pts
+        self._contained_point = None
 
-    def _add_hole(self, current_vertex_count, segments, hole_vertices):
-        n = len(hole_vertices)
-        if n < 3:
-            raise ValueError('A polygon hole must contains at least 3 points')
-        hole_vertices.resize((n, 2))
-        s = [(current_vertex_count + i, current_vertex_count + (i + 1)%n) for i in range(n)]  # reverse winding??
-        hole_pt = self._find_hole_position(hole_vertices)
-        return segments + s, current_vertex_count + n, hole_pt
+    def __getitem__(self, item):
+        return self._vertices.__getitem__(item)
 
-    def _find_hole_position(self, hole_vertices):
-        n = len(hole_vertices)
-        hole_pt = sum(hole_vertices)/n
-        return self._ray_march(hole_pt, hole_vertices)
+    def __iter__(self):
+        return iter(self._vertices)
 
-    @staticmethod
-    def _ray_march(target, hole_vertices):
+    def __len__(self):
+        return len(self._vertices)
+
+    @property
+    def vertices(self):
+        return self._vertices
+
+    @property
+    def indices(self):
+        return list(range(len(self._vertices)))
+
+    def compute_winding(self):
+        previous_pt = self._vertices[-1]
+        sum = 0
+        for p in self._vertices:
+            sum += previous_pt[0]*p[1] - previous_pt[1]*p[0]
+            previous_pt = p
+        return np.sign(sum)
+
+    @property
+    def interior_point(self):
+        if self._contained_point is None:
+            self._contained_point = self._find_interior_position()
+        return self._contained_point
+
+    def _find_interior_position(self) -> np.ndarray:
+        target = sum(self._vertices)/len(self._vertices)
+        return self._find_interior_position_with_ray_march(target)
+
+    def _find_interior_position_with_ray_march(self, target):
         crossed_left_segments = []
         crossed_right_segments = []
 
-        previous_x, previous_y = hole_vertices[-1]
+        previous_x, previous_y = self._vertices[-1]
         target_x, target_y = target
-        for current_x, current_y in hole_vertices:
+        for current_x, current_y in self._vertices:
             if (previous_y > target_y) != (current_y > target_y):
                 x_intersection = ((current_x - previous_x)/(current_y - previous_y))*(target_y - previous_y) + previous_x
                 if x_intersection < target_x:
@@ -130,17 +132,52 @@ class Polygon(object):
             raise RuntimeError("Could't find a point inside the hole, write some unit test :^)")
         return target
 
-    @staticmethod
-    def _compute_winding(pts):
-        previous_pt = pts[-1]
-        sum = 0
-        for p in pts:
-            sum += previous_pt[0]*p[1] - previous_pt[1]*p[0]
-            previous_pt = p
-        return np.sign(sum)
+
+class Polygon(object):
+    """
+    A polygon triangulated
+    """
+
+    # TODO: rename to TriangulatedPolygon, create a Polygon class to handle geomtry operations?
+    # TODO: possible correction, we apply a SCALE to every point, then smear the image, the displaced vertices are then on "subpixels" of
+    # the original image. By removing those subpixels we undo the smearing??? (must be done before sloping???)
+    def __init__(self, pts: np.ndarray, holes: List[np.ndarray] = None):
+        self.contour = PolygonContour(pts)
+        self.holes = [PolygonContour(hole) for hole in holes]
+        input_tri_dict = self._get_tri_dict()
+
+        tri_dict = tr.triangulate(input_tri_dict, 'p')
+
+        self._plane_triangles = tri_dict['triangles']
+        self._face_vertices = tri_dict['vertices']
+        self._winding = self.contour.compute_winding()
+
+    def _get_tri_dict(self):
+        """return dict to pass to triangles lib"""
+        tri_dict = dict(
+            vertices=np.concatenate([self.contour.vertices] + [hole.vertices for hole in self.holes]),
+            segments=list(self._segment_pairs())
+        )
+        if self.holes:
+            tri_dict['holes'] = np.array([hole.interior_point for hole in self.holes])
+        return tri_dict
 
     def face(self, item):
         return self._face_vertices[item]
 
-    def side(self, item):
-        return self._side_perimeter[item]
+    def triangles(self):
+        return self._plane_triangles
+
+    @property
+    def winding(self):
+        return self._winding
+
+    def _segment_pairs(self):
+        n = len(self.contour)
+        for i in range(n):
+            yield (i, (i + 1)%n)
+        for hole in self.holes:
+            m = len(hole)
+            for i in range(m):
+                yield (n + i, n + (i + 1)%m)
+            n += m

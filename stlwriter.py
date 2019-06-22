@@ -46,18 +46,19 @@ class STLWriter(object):
         self._write_side_triangles(polyon)
 
     def _write_side_triangles(self, polygon: Polygon):
-        w = (0, 0, polygon._winding)
-        for v1, v2 in polygon._segments:
-            previous, current = polygon.side(v1), polygon.side(v2)
-            v = current - previous
-            n = np.cross(v, w)
-            n = n/np.linalg.norm(n)
-            x1, y1 = previous
-            x2, y2 = current
-            t1 = ((x1, y1, 0), (x2, y2, 0), (x1, y1, -WORLD_DEPTH))
-            self.push(t1, n)
-            t2 = ((x1, y1, -WORLD_DEPTH), (x2, y2, 0), (x2, y2, -WORLD_DEPTH))
-            self.push(t2, n)
+        w = (0, 0, polygon.winding)
+        for contour in [polygon.contour] + polygon.holes:
+            for v1, v2 in (i, (i + 1)%len(contour) for i in range(len(contour))):
+                previous, current = contour[v1], contour[v2]
+                v = current - previous
+                n = np.cross(v, w)
+                n = n/np.linalg.norm(n)
+                x1, y1 = previous
+                x2, y2 = current
+                t1 = ((x1, y1, 0), (x2, y2, 0), (x1, y1, -WORLD_DEPTH))
+                self.push(t1, n)
+                t2 = ((x1, y1, -WORLD_DEPTH), (x2, y2, 0), (x2, y2, -WORLD_DEPTH))
+                self.push(t2, n)
 
     def _write_face_triangle(self, polygon: Polygon):
         n = (0, 0, 1)
