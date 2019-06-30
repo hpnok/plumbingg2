@@ -48,7 +48,8 @@ class STLWriter(object):
     def _write_side_triangles(self, polygon: Polygon):
         w = (0, 0, polygon.winding)
         for contour in [polygon.contour] + polygon.holes:
-            for v1, v2 in (i, (i + 1)%len(contour) for i in range(len(contour))):
+            for i in range(len(contour)):
+                v1, v2 = i, (i + 1)%len(contour)
                 previous, current = contour[v1], contour[v2]
                 v = current - previous
                 n = np.cross(v, w)

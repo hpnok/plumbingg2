@@ -1,10 +1,11 @@
+from gg2.mapparser import GG2Map
 from stlwriter import STLWriter
-from polygon.extractor import get_gg2_image, ImageToPolygon
+from polygon.extractor import ImageToPolygon
 
 
 if __name__ == '__main__':
-    name = "test"
-    image = get_gg2_image(name + ".png")
+    name = "gltex"
+    image = GG2Map(name + ".png").mask
     loader = STLWriter()
     extractor = ImageToPolygon(image)
     for poly in extractor.get_polygons():
