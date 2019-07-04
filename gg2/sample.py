@@ -136,6 +136,7 @@ class MaskPlatformingMixin(object):
         y = self._rect.y + self._moy
         dxref, dyref = dx, dy
 
+        # it's like if python had gotos :^)
         if self.on_ground:  # at the start
             dy = 0
             while dx != 0 and world_collider.overlap(self.mask, (x + dx, y + dy)):  # try but can't move forward
@@ -153,14 +154,31 @@ class MaskPlatformingMixin(object):
                 dy += 1
         else:
             while dx != 0 and world_collider.overlap(self.mask, (x + dx, y + dy)):
-                while dy != 0:
-                    dy -= sign(dy)  #change how dy is tested to accept "air slopes" from -dy - SCALE to abs(dx) + SCALE?
-                    if not world_collider.overlap(self.mask, (x + dx, y + dy)):
-                        break
+                if dyref < 0:
+                    while dy > -max(abs(dx) + SCALE, abs(dyref)) - SCALE:
+                        dy -= 1
+                        if not world_collider.overlap(self.mask, (x + dx, y + dy)):
+                            dyref = dy  # FIXME
+                            break
+                    else:
+                        dy = dyref
+                        while dy != 0:
+                            dy -= -1
+                            if not world_collider.overlap(self.mask, (x + dx, y + dy)):
+                                break
+                        else:  # dy = 0
+                            dx -= sign(dx)
+                            dy = dyref
+                            continue
                 else:
-                    dx -= sign(dx)
-                    dy = dyref
-                    continue
+                    while dy > -SCALE:
+                        dy -= 1  #change how dy is tested to accept "air slopes" from -dy - SCALE to abs(dx) + SCALE?
+                        if not world_collider.overlap(self.mask, (x + dx, y + dy)):
+                            break
+                    else:
+                        dx -= sign(dx)
+                        dy = dyref
+                        continue
                 break
             else:  # dx is 0
                 while dy != 0 and world_collider.overlap(self.mask, (x + dx, y + dy)):
@@ -337,10 +355,10 @@ if __name__ == '__main__':
     #level_image = pg.surfarray.make_surface(255 - level.mask.swapaxes(0, 1))
     level = MapCollider(level)
     level_image = level._mask.to_surface()
-    player = CharacterClass(pg.Rect(1200, 600, 12, 50), pg.Mask((12, 50)), (0, 0), level)
+    player = CharacterClass(pg.Rect(1200, 600, 16, 36), pg.Mask((16, 36)), (0, 0), level)
     player.mask.fill()
-    player._jump_speed = -360
-    player.max_x_speed = 360
+    player._jump_speed = -318
+    player.max_x_speed = 300
     player.max_y_speed = 800
 
     clock = Clock()
