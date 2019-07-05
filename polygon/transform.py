@@ -3,7 +3,7 @@ from typing import List, Tuple, Set
 import numpy as np
 
 from constant import SCALE
-from polygon.contourhierarchy import ContourHierarchy
+from polygon.ContourHierarchy import ContourHierarchy
 from .polygon import OrthogonalVertexList, CyclicList, VerticesList
 
 
