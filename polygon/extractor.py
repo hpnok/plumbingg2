@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 from constant import SCALE
-from polygon.ContourHierarchy import ContourHierarchy
+from polygon.contourhierarchy import ContourHierarchy
 from polygon.polygon import Polygon
 from polygon.transform import to_orthogonal_contour, step_to_slope, merge_slope, correction
 
