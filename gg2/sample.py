@@ -351,7 +351,7 @@ if __name__ == '__main__':
     pg.init()
 
     screen: pg.Surface = pg.display.set_mode((800, 600))
-    level = GG2Map("../cp_mountainjazz.png")
+    level = GG2Map("maps/cp_mountainjazz.png")
     #level_image = pg.surfarray.make_surface(255 - level.mask.swapaxes(0, 1))
     level = MapCollider(level)
     level_image = level._mask.to_surface()

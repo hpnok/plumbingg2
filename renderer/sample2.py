@@ -166,7 +166,7 @@ class GG2Level(Level):
 
 
 if __name__ == '__main__':
-    name = "../cp_mountainjazz.png"
+    name = "../gg2/maps/cp_mountainjazz.png"
     level = GG2Level(name)
 
     window = app.Window(width=960, height=540, color=(0.44, 0.11, 0.73, 1.))
