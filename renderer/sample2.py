@@ -13,6 +13,7 @@ from renderer.camera import Camera
 VERTEX_POSITION = "position"
 MODEL_MATRIX = "model"
 VIEW_MATRIX = "view"
+PROJECTION_MATRIX = "projection"
 MAP_TEXTURE = "map_texture"
 TEXTURE_MATRIX = "tex_mat"
 
@@ -92,7 +93,6 @@ class Renderable(object):
 
 
 class Level(Renderable):
-
     def __init__(self, polygons: Iterator[Polygon], width: int, height: int):
         self._buffers = []
         for p in polygons:
@@ -100,8 +100,9 @@ class Level(Renderable):
             self._buffers.append(ExtrudedPerimeterVertexBuffer(p.contour.vertices))
             for h in p.holes:
                 self._buffers.append(ExtrudedPerimeterVertexBuffer(h.vertices))
-        self._model = glm.translation(-width//2, -height//2, 0)
-        glm.scale(self._model, 2/max(width, height))
+        #self._model = glm.translation(-width//2, -height//2, 0)
+        #glm.scale(self._model, 2/max(width, height))
+        self._model = np.eye(4, dtype=np.float32)
         self._tex_mat = glm.scale(np.eye(4, dtype=np.float32), 1/width, 1/height, 1)
 
     def draw(self, r: gloo.Program, dt: float):
@@ -113,8 +114,10 @@ class Level(Renderable):
 
 
 class GG2Level(Level):
-    def __init__(self, file_name):
-        gg2_map = GG2Map(file_name)
+    def __init__(self, file_name: str = None, gg2_map: GG2Map = None):
+        if (file_name is not None) == (gg2_map is not None):
+            raise ValueError('Only one of file_name or GG2Map must be defined')
+        gg2_map = GG2Map(file_name) if file_name is not None else gg2_map
         extractor = ImageToPolygon(gg2_map.mask)
         width, height = gg2_map.width*SCALE, gg2_map.height*SCALE
         super(GG2Level, self).__init__(extractor.get_polygons(), width, height)
@@ -177,7 +180,7 @@ if __name__ == '__main__':
     )
     renderer[MAP_TEXTURE] = level._tex
 
-    camera = Camera()
+    camera = Camera(z=-200)
 
 
     @window.event
@@ -189,7 +192,7 @@ if __name__ == '__main__':
     def on_resize(w, h):
         if h != 0:
             ratio = w/float(h)
-            renderer['projection'] = glm.perspective(96., ratio, 0.01, 100.)
+            renderer[PROJECTION_MATRIX] = glm.perspective(96., ratio, 0.01, 1000.)
 
 
     @window.event

@@ -1,3 +1,5 @@
+from typing import Tuple, List
+
 import numpy as np
 from glumpy import glm
 from glumpy.app.window import key
@@ -15,9 +17,9 @@ class Camera(object):
         ord('D'): "moving_right"
     }
 
-    def __init__(self):
+    def __init__(self, x=None, y=None, z=None):
         self._position = np.zeros(3, dtype=np.float32)
-        self._position[2] = -1.5
+        self.set_position(x, y, z)
         self._yaw = 0  # around z
         self._pitch = 0  # inclination
         self._roll = 0
@@ -33,13 +35,21 @@ class Camera(object):
         self.moving_backward = False
 
     def get_view(self):
-        view = glm.scale(np.eye(4, dtype=np.float), 1, -1, 1)
+        view = np.eye(4, dtype=np.float)
         glm.translate(view, *(-self._position))  # shift the world so that the camera is at the origin
         glm.yrotate(view, self._yaw)  # rotate the world so that it faces the camera
         glm.xrotate(view, self._pitch)
         glm.zrotate(view, self._roll)
-        glm.scale(view, 1, 1, -1)
+        glm.scale(view, 1, -1, -1)
         return view
+
+    def set_position(self, x=None, y=None, z=None):
+        if x is not None:
+            self._position[0] = x
+        if y is not None:
+            self._position[1] = y
+        if z is not None:
+            self._position[2] = z
 
     def set_state(self, state, new_value):
         try:
@@ -49,8 +59,15 @@ class Camera(object):
         setattr(self, attribute_name, new_value)
         return True
 
-    def update(self, dt):
+    def to_world_coordinate(self, screen_position: List[int]):
+        # FIXME: shouldn't be here, since it requires both projection and view matrices
+        view = self.get_view()
+        view_inv = np.linalg.inv(view)
+        p1 = np.dot(view_inv, np.array(screen_position + [0, 1], dtype=np.float32))
+        p2 = np.dot(view_inv, np.array(screen_position + [-1, 1], dtype=np.float32))
+        return p1, p2
 
+    def update(self, dt):
         # calculate the translation desired, apply rotation to it so that the translation
         # is applied from the camera points of view then apply it to the camera position
         translation = np.array([0, 0, 0, 1], dtype=np.float)
@@ -63,9 +80,10 @@ class Camera(object):
         if self.moving_down:
             translation[1] -= dt
         if self.moving_forward:
-            translation[2] += dt
+            translation[2] += dt/10
         if self.moving_backward:
-            translation[2] -= dt
+            translation[2] -= dt/10
+        translation *= 500  # FIXME: define speed somewhere
         rotation = np.eye(4, dtype=np.float)
         glm.yrotate(rotation, self._yaw)
         glm.xrotate(rotation, self._pitch)

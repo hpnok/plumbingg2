@@ -1,3 +1,5 @@
+from typing import List
+
 import numpy as np
 
 
@@ -20,6 +22,17 @@ def line_with_line(p0, p1, q0, q1):
     if t < 0 or t > 1:
         return None
     return p0 + s*u
+
+
+def line_with_plane(p0: np.ndarray,
+                    p1: np.ndarray,
+                    n_plane: np.ndarray,
+                    p_plane: np.ndarray) -> np.ndarray or None:
+    det = np.dot(n_plane, p1 - p0)
+    if det == 0:
+        return None
+    k: float = np.dot(n_plane, p_plane - p0)/det
+    return p0 + k*(p1 - p0)
 
 
 def pnpoly(vertices, test_pt):

@@ -17,6 +17,7 @@ class GG2Map(object):
 
         assert (self.height, self.width) == self._mask.shape
         self._mask[self.height - 1, 0] = 0
+        self.name = file_name.split('.')[0]
 
     @property
     def mask(self):
@@ -30,9 +31,8 @@ class GG2Map(object):
     def extract_wm(cls, map_file: PngImageFile) -> np.ndarray:
         metadata = map_file.text[GG2_METADATA_TAG]
         index_wm_start = metadata.find(WM_TAG) + len(WM_TAG)
-        index_wm_end = metadata[index_wm_start:].find(WM_END_TAG)
 
-        return cls._decompress_wm(metadata[index_wm_start: index_wm_end])
+        return cls._decompress_wm(metadata[index_wm_start:])
 
     @classmethod
     def _decompress_wm(cls, metadata_wm: str) -> np.ndarray:
